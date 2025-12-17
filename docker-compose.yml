@@ -1,0 +1,52 @@
+services:
+  # Next.js アプリケーション (Bun ランタイム)
+  app:
+    build: ./bun
+    container_name: slaido_app
+    tty: true
+    volumes:
+      - ./bun:/project
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - MONGODB_URI=${MONGODB_URI:-mongodb://root:password@db:27017/db_slaido?authSource=admin}
+      - MONGODB_DB=${MONGODB_DB:-db_slaido}
+      - NEXT_TELEMETRY_DISABLED=1
+
+  # Python アプリケーション
+  python:
+    build: ./python
+    container_name: slaido_python
+    tty: true
+    volumes:
+      - ./models:/app/models
+    environment:
+      - MONGODB_URI=${MONGODB_URI:-mongodb://root:password@db:27017/db_slaido?authSource=admin}
+      - MONGODB_DB=${MONGODB_DB:-db_slaido}
+    depends_on:
+      - db
+
+  # MongoDB データベース
+  db:
+    build: ./mongoDB
+    container_name: slaido_mongo
+    tty: true
+    volumes:
+      - ./mongoDB/mongo_db.js:/docker-entrypoint-initdb.d/mongo_db.js
+    ports:
+      - "27017:27017"
+    command:
+      ["--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo.key"]
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=db_slaido
+    healthcheck:
+      test: |
+        mongosh --eval "try { rs.status() } catch (err) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'db:27017'}]}) }" -u root -p password --authenticationDatabase admin
+      interval: 5s
+      timeout: 5s
+      retries: 5

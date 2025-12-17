@@ -1,0 +1,5 @@
+pymongo
+numpy
+sentence-transformers
+scikit-learn
+# intfloat/multilingual-e5-large モデルは sentence_transformers で自動ダウンロードされます

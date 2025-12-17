@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+bun/bun.lock
+
+# Build output
+dist/
+.next/
+out/
+
+# Environment variables
+venv
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker volumes
+mongo_data/
+models/
