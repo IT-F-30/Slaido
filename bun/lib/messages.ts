@@ -1,28 +1,26 @@
-import { getDatabaseName, getMongoClient } from '@/lib/mongodb';
-import type { WithId } from 'mongodb';
+import {
+    getDatabaseName,
+    getMongoClient,
+    OUTPUT_COLLECTION,
+    OUTPUT_DEFAULT_SORT,
+    normalizeOutputDocs,
+    type RawOutputDocument,
+} from '@/lib/mongodb';
+import type { MongoDB } from '@/types/MongoDB';
 
-export interface Message {
-    _id?: string;
-    word: string;
-    weight: number;
-}
-
-const COLLECTION = 'correlations';
-
-function normalize(doc: WithId<Message>): Message {
-    const { _id, ...rest } = doc;
-    return { ...rest, _id: _id?.toString() };
-}
+export type Message = MongoDB;
 
 export async function getMessages(): Promise<Message[]> {
     try {
         const client = await getMongoClient();
-        const collection = client.db(getDatabaseName()).collection<Message>(COLLECTION);
-        const docs = await collection.find({}).toArray();
+        const collection = client
+            .db(getDatabaseName())
+            .collection<MongoDB>(OUTPUT_COLLECTION);
+        const docs = await collection.find({}).sort(OUTPUT_DEFAULT_SORT).toArray();
 
-        return docs.map(normalize);
+        return normalizeOutputDocs(docs as RawOutputDocument[]);
     } catch (error) {
-        console.error('Failed to fetch messages:', error);
+        console.error('Failed to fetch output messages:', error);
         return [];
     }
 }

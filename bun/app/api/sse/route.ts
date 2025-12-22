@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getMongoClient, getDatabaseName } from '@/lib/mongodb';
+import { getMongoClient, getDatabaseName, OUTPUT_COLLECTION } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
     const client = await getMongoClient();
     const db = client.db(getDatabaseName());
-    const collection = db.collection('correlations');
+    const collection = db.collection(OUTPUT_COLLECTION);
 
     let changeStream: any;
 

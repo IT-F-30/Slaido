@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import type { Todo } from "@/types/todo";
+import type { MongoDB } from "@/types/MongoDB";
 
 const WORD_CLOUD_CONFIG = {
   fontOffset: 10,
@@ -55,12 +55,12 @@ function getRandomColor() {
   return color;
 }
 
-export default function WordCloudCanvas({ todos }: { todos: Todo[] }) {
+export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [words, setWords] = useState<PlacedWord[]>([]);
 
   useEffect(() => {
-    if (!todos || !todos.length || !containerRef.current) {
+    if (!mongos || !mongos.length || !containerRef.current) {
       setWords([]);
       return;
     }
@@ -96,12 +96,25 @@ export default function WordCloudCanvas({ todos }: { todos: Todo[] }) {
         maxFont: Math.floor(tWidth / 6) * fontScale,
       };
 
-      const sortedTodos = [...todos].sort((a, b) => b.weight - a.weight);
+      const getEffectiveWeight = (mongo: MongoDB) => {
+        const weightValue = Number(mongo.weight);
+        if (Number.isFinite(weightValue) && weightValue > 0) {
+          return weightValue;
+        }
+        const groupValue = Number(mongo.group_number);
+        return Number.isFinite(groupValue) && groupValue > 0 ? groupValue : 1;
+      };
 
-      if (sortedTodos.length === 0) return [];
+      const sortedmongos = [...mongos].sort(
+        (a, b) => getEffectiveWeight(b) - getEffectiveWeight(a),
+      );
 
-      const maxWeight = sortedTodos[0].weight;
-      const minWeight = sortedTodos[sortedTodos.length - 1].weight;
+      if (sortedmongos.length === 0) return [];
+
+      const maxWeight = getEffectiveWeight(sortedmongos[0]);
+      const minWeight = getEffectiveWeight(
+        sortedmongos[sortedmongos.length - 1],
+      );
       const fontFactor =
         (options.maxFont - options.minFont) / (maxWeight - minWeight || 1);
 
@@ -163,15 +176,16 @@ export default function WordCloudCanvas({ todos }: { todos: Todo[] }) {
 
       const placedWords: PlacedWord[] = [];
 
-      sortedTodos.forEach((todo, index) => {
+      sortedmongos.forEach((mongo, index) => {
+        const weight = getEffectiveWeight(mongo);
         const fontSize = Math.floor(
-          (todo.weight - minWeight) * fontFactor +
+          (weight - minWeight) * fontFactor +
             options.minFont +
             options.fontOffset,
         );
         const color = getRandomColor();
 
-        const { w, h } = measureWord(todo.word, fontSize);
+        const { w, h } = measureWord(mongo.word, fontSize);
 
         let placed = false;
         let pX = 0,
@@ -397,8 +411,8 @@ export default function WordCloudCanvas({ todos }: { todos: Todo[] }) {
 
         if (placed) {
           placedWords.push({
-            id: todo._id || `${todo.word}-${index}`,
-            text: todo.word,
+            id: mongo._id || `${mongo.word}-${index}`,
+            text: mongo.word,
             x: pX,
             y: pY,
             width: w,
@@ -420,7 +434,7 @@ export default function WordCloudCanvas({ todos }: { todos: Todo[] }) {
 
     for (const scale of scales) {
       result = attemptPlacement(scale);
-      const placementRate = result.length / todos.length;
+      const placementRate = result.length / mongos.length;
 
       // If we placed at least 80% of words, or it's the last attempt, use this result
       if (placementRate >= 0.8 || scale === scales[scales.length - 1]) {
@@ -429,9 +443,9 @@ export default function WordCloudCanvas({ todos }: { todos: Todo[] }) {
     }
 
     setWords(result);
-  }, [todos]);
+  }, [mongos]);
 
-  if (!todos || !todos.length) {
+  if (!mongos || !mongos.length) {
     return (
       <div
         style={{

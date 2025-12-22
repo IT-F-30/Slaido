@@ -17,17 +17,17 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
 
   # Python アプリケーション
-  python:
-    build: ./python
-    container_name: slaido_python
-    tty: true
-    volumes:
-      - ./models:/app/models
-    environment:
-      - MONGODB_URI=${MONGODB_URI:-mongodb://root:password@db:27017/db_slaido?authSource=admin}
-      - MONGODB_DB=${MONGODB_DB:-db_slaido}
-    depends_on:
-      - db
+  # python:
+  #   build: ./python
+  #   container_name: slaido_python
+  #   tty: true
+  #   volumes:
+  #     - ./models:/app/models
+  #   environment:
+  #     - MONGODB_URI=${MONGODB_URI:-mongodb://root:password@db:27017/db_slaido?authSource=admin}
+  #     - MONGODB_DB=${MONGODB_DB:-db_slaido}
+  #   depends_on:
+  #     - db
 
   # MongoDB データベース
   db:
@@ -36,17 +36,77 @@ services:
     tty: true
     volumes:
       - ./mongoDB/mongo_db.js:/docker-entrypoint-initdb.d/mongo_db.js
+      - mongo_data:/data/db
     ports:
       - "27017:27017"
-    command:
-      ["--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo.key"]
+    command: ["--bind_ip_all", "--keyFile", "/etc/mongo.key"]
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=password
       - MONGO_INITDB_DATABASE=db_slaido
     healthcheck:
-      test: |
-        mongosh --eval "try { rs.status() } catch (err) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'db:27017'}]}) }" -u root -p password --authenticationDatabase admin
+      test: mongosh --eval "db.adminCommand('ping')" -u root -p password --authenticationDatabase admin
       interval: 5s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  # MongoDB 操作用ツール（output コレクション用）
+  # 実行例:
+  #   データの追加: docker compose exec db-tools manage add "サンプル単語" 1
+  #   データの削除: docker compose exec db-tools manage delete "サンプル単語"
+  #   データの一覧: docker compose exec db-tools manage list
+  #   全データの削除: docker compose exec db-tools manage clear
+  db-tools:
+    image: mongo:latest
+    container_name: slaido_db_tools
+    tty: true
+    environment:
+      - MONGO_HOST=db
+      - MONGO_PORT=27017
+      - MONGO_USER=root
+      - MONGO_PASS=password
+      - MONGO_DB=db_slaido
+      - MONGO_AUTH_DB=admin
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        cat << 'EOF' > /usr/local/bin/manage
+        #!/bin/bash
+        CMD=$$1
+        WORD=$$2
+        GROUP=$${3:-2}
+
+        AUTH="-u $$MONGO_USER -p $$MONGO_PASS --authenticationDatabase $$MONGO_AUTH_DB"
+        URI="mongodb://$$MONGO_HOST:$$MONGO_PORT/$$MONGO_DB"
+
+        case $$CMD in
+          add)
+            mongosh "$$URI" $$AUTH --eval "db.output.insertOne({word: \"$$WORD\", group_number: NumberInt($$GROUP)})"
+            ;;
+          delete)
+            mongosh "$$URI" $$AUTH --eval "db.output.deleteOne({word: \"$$WORD\"})"
+            ;;
+          list)
+            echo "--- Collection: output ---"
+            mongosh "$$URI" $$AUTH --eval "db.output.find().toArray()"
+            ;;
+          clear)
+            mongosh "$$URI" $$AUTH --eval "db.output.deleteMany({})"
+            echo "Cleared all data from output collection."
+            ;;
+          *)
+            echo "Usage: manage {add|delete|list|clear} [word] [group]"
+            exit 1
+            ;;
+        esac
+        EOF
+        chmod +x /usr/local/bin/manage
+        exec tail -f /dev/null
+
+volumes:
+  mongo_data:

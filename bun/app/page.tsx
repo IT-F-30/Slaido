@@ -1,15 +1,15 @@
-import TodosClient from "@/components/TodosClient";
-import { getTodos } from "@/lib/todos";
+import SlaidoClient from "@/components/SlaidoClient";
+import { getMongodb } from "@/lib/mongodb";
 
 export default async function Home() {
-  const todos = await getTodos();
+  const Mongodb = await getMongodb();
 
   return (
     <main>
       <div>
-        <h1>BadSlido</h1>
+        <h1>Slaido</h1>
       </div>
-      <TodosClient initialTodos={todos} />
+      <SlaidoClient initialTodos={Mongodb} />
     </main>
   );
 }
