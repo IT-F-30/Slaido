@@ -1,7 +1,11 @@
-db = db.getSiblingDB("db_slaido");
+const dbName = "db_slaido";
+const db = db.getSiblingDB(dbName);
 
-// Create collection with validation rules
-db.createCollection("messages", {
+/**
+ * Collection: input
+ * Stores incoming words for processing.
+ */
+db.createCollection("input", {
   validator: {
     $jsonSchema: {
       bsonType: "object",
@@ -9,7 +13,7 @@ db.createCollection("messages", {
       properties: {
         word: {
           bsonType: "string",
-          description: "word must be a string and is required",
+          description: "Required: The word to be processed.",
         },
       },
     },
@@ -17,24 +21,28 @@ db.createCollection("messages", {
   validationAction: "error",
 });
 
-db.createCollection("correlations", {
+/**
+ * Collection: output
+ * Stores processed words along with their assigned group numbers.
+ */
+db.createCollection("output", {
   validator: {
     $jsonSchema: {
       bsonType: "object",
-      required: ["word"],
+      required: ["word", "group_number"],
       properties: {
         word: {
           bsonType: "string",
-          description: "correlation must be a string and is required",
+          description: "Required: The processed word.",
         },
-        weight: {
+        group_number: {
           bsonType: "int",
-          minimum: 1,
-          maximum: 100,
-          description: "weight must be an integer between 1 and 100",
+          description: "Required: The group number identifier.",
         },
       },
     },
   },
   validationAction: "error",
 });
+
+print(`Database '${dbName}' initialized with 'input' and 'output' collections.`);

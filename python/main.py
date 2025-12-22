@@ -246,7 +246,11 @@ def main():
 
     # グルーパーを初期化（最初に1回だけ）
     print("Initializing TextGrouper...", flush=True)
-    grouper = TextGrouper(distance_threshold=0.154)
+    # 0.165 is the sweet spot:
+    # - Includes Cabbage (dist ~0.163 to other veggies)
+    # - Excludes Apple (dist ~0.168 to veggies)
+    # - 0.132 was too strict (fragmented), 0.17 starts merging different categories
+    grouper = TextGrouper(distance_threshold=0.168)
 
     # 前回処理したメッセージ数を記録（変更検出用）
     last_message_count = -1
