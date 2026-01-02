@@ -1,5 +1,8 @@
 import { MongoClient, MongoClientOptions, type WithId } from "mongodb";
-import type { MongoDB } from "@/types/MongoDB";
+import type { Word } from "@/types/Word";
+
+// Backward compatibility alias
+export type { Word as MongoDB } from "@/types/Word";
 
 const uri =
   process.env.MONGODB_URI ||
@@ -16,7 +19,7 @@ declare global {
 export const OUTPUT_COLLECTION = "output";
 export const DEFAULT_GROUP_NUMBER = 1;
 export const OUTPUT_DEFAULT_SORT = { group_number: 1, word: 1 } as const;
-export type RawOutputDocument = WithId<MongoDB>;
+export type RawOutputDocument = WithId<Word>;
 
 export function coercePositiveInteger(
   value: unknown,
@@ -32,7 +35,7 @@ export function coercePositiveInteger(
   return whole > 0 ? whole : fallback;
 }
 
-export function normalizeOutputDoc(doc: RawOutputDocument): MongoDB {
+export function normalizeOutputDoc(doc: RawOutputDocument): Word {
   const word =
     typeof doc.word === "string" ? doc.word : String(doc.word ?? "").trim();
 
@@ -52,16 +55,16 @@ export function normalizeOutputDoc(doc: RawOutputDocument): MongoDB {
   };
 }
 
-export function normalizeOutputDocs(docs: RawOutputDocument[]): MongoDB[] {
+export function normalizeOutputDocs(docs: RawOutputDocument[]): Word[] {
   return docs.map(normalizeOutputDoc);
 }
 
-export async function getMongodb(): Promise<MongoDB[]> {
+export async function getWords(): Promise<Word[]> {
   try {
     const client = await getMongoClient();
     const collection = client
       .db(getDatabaseName())
-      .collection<MongoDB>(OUTPUT_COLLECTION);
+      .collection<Word>(OUTPUT_COLLECTION);
 
     const docs = await collection.find({}).sort(OUTPUT_DEFAULT_SORT).toArray();
 
@@ -71,6 +74,9 @@ export async function getMongodb(): Promise<MongoDB[]> {
     return [];
   }
 }
+
+// Backward compatibility alias
+export const getMongodb = getWords;
 
 if (!process.env.MONGODB_URI) {
   console.warn(

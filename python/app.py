@@ -4,6 +4,7 @@ main.pyの核心部分：SentenceTransformerによる類似度計算と階層的
 """
 
 import os
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering
