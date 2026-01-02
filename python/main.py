@@ -1,5 +1,7 @@
-import pymongo
 import time
+
+import pymongo
+
 
 def main():
     # MongoDBの接続情報
@@ -7,7 +9,30 @@ def main():
     client = pymongo.MongoClient(mongo_uri)
     db = client.db_slaido
 
-    print("Grouping process started...")
+    # ポーリング間隔（秒）
+    POLL_INTERVAL = 5
+
+    # MongoDB接続
+    print(f"Connecting to MongoDB: {MONGO_URI}", flush=True)
+    client = MongoClient(MONGO_URI)
+    db = client[DB_NAME]
+    messages_col = db[COL_MESSAGES]
+    correlations_col = db[COL_CORRELATIONS]
+
+    # グルーパーを初期化（最初に1回だけ）
+    print("Initializing TextGrouper...", flush=True)
+    # 0.165 is the sweet spot:
+    # - Includes Cabbage (dist ~0.163 to other veggies)
+    # - Excludes Apple (dist ~0.168 to veggies)
+    # - 0.132 was too strict (fragmented), 0.17 starts merging different categories
+    grouper = TextGrouper(distance_threshold=0.168)
+
+    # 前回処理したメッセージ数を記録（変更検出用）
+    last_message_count = -1
+    last_message_hash = None
+
+    print(f"\nStarting infinite loop (polling every {POLL_INTERVAL}s)...", flush=True)
+    print("=" * 50, flush=True)
 
     while True:
         try:
@@ -19,7 +44,7 @@ def main():
                 # データを二個ずつ（ペア）にして処理
                 for i in range(0, len(input_items), 2):
                     chunk = input_items[i : i + 2]
-                    
+
                     # ペアの最初の要素を取得
                     first_item = chunk[0]
                     # グループ番号を設定 (1, 2, 3...)

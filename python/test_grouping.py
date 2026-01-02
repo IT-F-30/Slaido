@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering
@@ -24,7 +25,7 @@ class TextGrouper:
     def group_texts_hierarchical(self, texts: list[str], threshold: float = None) -> list[list[str]]:
         if not texts: return []
         if len(texts) == 1: return [texts]
-        
+
         t = threshold if threshold is not None else self.distance_threshold
         embeddings = self.get_embeddings(texts)
         clustering = AgglomerativeClustering(
@@ -54,12 +55,12 @@ def test_thresholds():
 
     # その他
     others = {"酢","樽"}
-    
+
     grouper = TextGrouper()
-    
+
     print(f"Testing thresholds for: {texts}")
     print("-" * 50)
-    
+
     # Print similarity matrix
     embeddings = grouper.get_embeddings(texts)
     sim_matrix = cosine_similarity(embeddings)
@@ -82,25 +83,25 @@ def test_thresholds():
     target_names = ["Fruits", "Vegetables", "Cakes", "Others"]
 
     thresholds = list(i / 1000 for i in range(100, 300))
-    
+
     # Test different linkage methods
     linkage_methods = ['average', 'complete']
-    
+
     print("Optimization started...")
 
     print("Detailed check for specific thresholds...")
     check_thresholds = [0.132, 0.16, 0.18, 0.20]
-    
+
     for t in check_thresholds:
         print(f"\n--- Threshold {t} ---")
         grouper.distance_threshold = t # Hacky update or just pass to method
         # TextGrouper class has distance_threshold, but group_texts_hierarchical argument 'threshold' (if I didn't remove it?)
-        # My previous edit removed the 'threshold' arg from group_texts_hierarchical in the class? 
+        # My previous edit removed the 'threshold' arg from group_texts_hierarchical in the class?
         # No, I am editing the test script. TextGrouper definition is in the same file (lines 15-41).
         # Wait, TextGrouper in test_grouping.py defaults to using 'threshold' arg if passed.
-        
+
         groups = [set(g) for g in grouper.group_texts_hierarchical(texts, threshold=t)]
-        
+
         # Calculate error to compare
         current_error = 0
         for target in target_groups:
@@ -110,7 +111,7 @@ def test_thresholds():
                  diff = len(target.symmetric_difference(g))
                  if diff < min_diff: min_diff = diff
              current_error += min_diff
-             
+
         print(f"Total Error: {current_error}")
         for i, g in enumerate(groups, 1):
             # Try to identify what this group represents
@@ -118,7 +119,7 @@ def test_thresholds():
             if fruits.issubset(g): label = "ALL FRUITS"
             elif vegetables.issubset(g): label = "ALL VEGETABLES"
             elif cakes.issubset(g): label = "ALL CAKES"
-                
+
             print(f"  Group {i}: {g} ({label})")
 
 if __name__ == "__main__":

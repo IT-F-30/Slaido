@@ -4,12 +4,28 @@ import { useEffect, useState, useRef } from "react";
 import type { MongoDB } from "@/types/MongoDB";
 
 const WORD_CLOUD_CONFIG = {
-  fontOffset: 10,
+  fontSize: 18, // Fixed font size for all words
   fontFamily: "Montserrat, sans-serif",
   verticalEnabled: true,
   padding_left: 2,
   padding_top: 2,
 };
+
+// Predefined colors for groups (will cycle if more groups exist)
+const GROUP_COLORS = [
+  "#E63946", // Red
+  "#2A9D8F", // Teal
+  "#E9C46A", // Yellow
+  "#264653", // Dark Blue
+  "#F4A261", // Orange
+  "#9B59B6", // Purple
+  "#3498DB", // Blue
+  "#1ABC9C", // Turquoise
+  "#E74C3C", // Crimson
+  "#27AE60", // Green
+  "#F39C12", // Amber
+  "#8E44AD", // Violet
+];
 
 enum SpaceType {
   LB = 1, // Left Bottom
@@ -34,6 +50,7 @@ interface PlacedWord {
   font: string;
   fontSize: number;
   rotate: number;
+  groupNumber: number;
 }
 
 interface Space {
@@ -44,15 +61,13 @@ interface Space {
   y: number;
 }
 
-function getRandomColor() {
-  const letters = "0123456789ABCDEF";
-  let color = "#";
-  for (let i = 0; i < 6; i++) {
-    const minHex = 5;
-    const idx = Math.floor(Math.random() * (16 - minHex)) + minHex;
-    color += letters[idx];
-  }
-  return color;
+interface GroupedWord {
+  mongo: MongoDB;
+  groupNumber: number;
+}
+
+function getGroupColor(groupNumber: number): string {
+  return GROUP_COLORS[groupNumber % GROUP_COLORS.length];
 }
 
 export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
@@ -83,7 +98,6 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
         return x >= 0 && y >= 0 && x + w <= tWidth && y + h <= tHeight;
       } else {
         // For rotated text, check if the bounding box fits
-        // When rotated 270deg, width and height are swapped in terms of screen space
         return x >= 0 && y >= 0 && x + h <= tWidth && y + w <= tHeight;
       }
     };
@@ -92,31 +106,39 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
     const attemptPlacement = (fontScale: number): PlacedWord[] => {
       const options = {
         ...WORD_CLOUD_CONFIG,
-        minFont: Math.max(Math.floor(tWidth / 30), 10) * fontScale,
-        maxFont: Math.floor(tWidth / 6) * fontScale,
+        fontSize: Math.max(Math.floor(tWidth / 40), 12) * fontScale,
       };
 
-      const getEffectiveWeight = (mongo: MongoDB) => {
-        const weightValue = Number(mongo.weight);
-        if (Number.isFinite(weightValue) && weightValue > 0) {
-          return weightValue;
+      // Group words by group_number and sort by group_number (smaller first = closer to center)
+      const groupedWords: GroupedWord[] = mongos.map((mongo) => ({
+        mongo,
+        groupNumber: Number.isFinite(mongo.group_number)
+          ? mongo.group_number
+          : 999,
+      }));
+
+      // Sort by group_number to place smaller groups closer to center
+      groupedWords.sort((a, b) => a.groupNumber - b.groupNumber);
+
+      // Group words by their group_number for batch placement
+      const groupMap = new Map<number, GroupedWord[]>();
+      groupedWords.forEach((gw) => {
+        if (!groupMap.has(gw.groupNumber)) {
+          groupMap.set(gw.groupNumber, []);
         }
-        const groupValue = Number(mongo.group_number);
-        return Number.isFinite(groupValue) && groupValue > 0 ? groupValue : 1;
-      };
+        groupMap.get(gw.groupNumber)!.push(gw);
+      });
 
-      const sortedmongos = [...mongos].sort(
-        (a, b) => getEffectiveWeight(b) - getEffectiveWeight(a),
+      // Flatten back maintaining group order but keeping group members together
+      const sortedWords: GroupedWord[] = [];
+      const sortedGroupNumbers = Array.from(groupMap.keys()).sort(
+        (a, b) => a - b,
       );
+      sortedGroupNumbers.forEach((gn) => {
+        sortedWords.push(...groupMap.get(gn)!);
+      });
 
-      if (sortedmongos.length === 0) return [];
-
-      const maxWeight = getEffectiveWeight(sortedmongos[0]);
-      const minWeight = getEffectiveWeight(
-        sortedmongos[sortedmongos.length - 1],
-      );
-      const fontFactor =
-        (options.maxFont - options.minFont) / (maxWeight - minWeight || 1);
+      if (sortedWords.length === 0) return [];
 
       let spaceDataObject: { [key: string]: Space } = {};
       let spaceIdArray: string[] = [];
@@ -176,14 +198,11 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
 
       const placedWords: PlacedWord[] = [];
 
-      sortedmongos.forEach((mongo, index) => {
-        const weight = getEffectiveWeight(mongo);
-        const fontSize = Math.floor(
-          (weight - minWeight) * fontFactor +
-            options.minFont +
-            options.fontOffset,
-        );
-        const color = getRandomColor();
+      sortedWords.forEach((groupedWord, index) => {
+        const mongo = groupedWord.mongo;
+        const groupNumber = groupedWord.groupNumber;
+        const fontSize = options.fontSize;
+        const color = getGroupColor(groupNumber);
 
         const { w, h } = measureWord(mongo.word, fontSize);
 
@@ -421,6 +440,7 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
             font: options.fontFamily,
             fontSize,
             rotate: pRotate,
+            groupNumber,
           });
         }
       });
@@ -430,7 +450,7 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
 
     // Try with different scales until we get good placement
     let result: PlacedWord[] = [];
-    const scales = [1.0, 0.85, 0.7];
+    const scales = [1.0, 0.85, 0.7, 0.6];
 
     for (const scale of scales) {
       result = attemptPlacement(scale);
@@ -444,6 +464,11 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
 
     setWords(result);
   }, [mongos]);
+
+  // Get unique group numbers for legend
+  const uniqueGroups = Array.from(
+    new Set(words.map((w) => w.groupNumber)),
+  ).sort((a, b) => a - b);
 
   if (!mongos || !mongos.length) {
     return (
@@ -462,36 +487,47 @@ export default function WordCloudCanvas({ mongos }: { mongos: MongoDB[] }) {
 
   return (
     <div
-      ref={containerRef}
       style={{
         width: "100%",
         height: "75vh",
-        position: "relative",
-        overflow: "hidden",
-        fontFamily: "Montserrat, sans-serif",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {words.map((word) => (
-        <span
-          key={word.id}
-          style={{
-            position: "absolute",
-            left: word.x,
-            top: word.y,
-            fontSize: `${word.fontSize}px`,
-            fontFamily: word.font,
-            color: word.color,
-            lineHeight: `${word.fontSize}px`,
-            paddingLeft: "2px",
-            whiteSpace: "nowrap",
-            transform: `rotate(${word.rotate}deg)`,
-            transformOrigin: "center center",
-            userSelect: "none",
-          }}
-        >
-          {word.text}
-        </span>
-      ))}
+      {/* Word cloud container */}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          position: "relative",
+          overflow: "hidden",
+          fontFamily: "Montserrat, sans-serif",
+        }}
+      >
+        {words.map((word) => (
+          <span
+            key={word.id}
+            style={{
+              position: "absolute",
+              left: word.x,
+              top: word.y,
+              fontSize: `${word.fontSize}px`,
+              fontFamily: word.font,
+              color: word.color,
+              lineHeight: `${word.fontSize}px`,
+              paddingLeft: "2px",
+              whiteSpace: "nowrap",
+              transform: `rotate(${word.rotate}deg)`,
+              transformOrigin: "center center",
+              userSelect: "none",
+              fontWeight: 500,
+            }}
+            title={`Group: ${word.groupNumber}`}
+          >
+            {word.text}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -18,7 +18,10 @@ export const DEFAULT_GROUP_NUMBER = 1;
 export const OUTPUT_DEFAULT_SORT = { group_number: 1, word: 1 } as const;
 export type RawOutputDocument = WithId<MongoDB>;
 
-export function coercePositiveInteger(value: unknown, fallback: number): number {
+export function coercePositiveInteger(
+  value: unknown,
+  fallback: number,
+): number {
   const parsed = Number(value);
 
   if (!Number.isFinite(parsed)) {
@@ -86,7 +89,10 @@ const connectWithRetry = async (
     return connectedClient;
   } catch (err) {
     if (retries === 0) {
-      console.error("Failed to connect to MongoDB after multiple attempts:", err);
+      console.error(
+        "Failed to connect to MongoDB after multiple attempts:",
+        err,
+      );
       throw err;
     }
 
